@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { CurveLaunchpad } from "../target/types/curve_launchpad";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { ComputeBudgetProgram, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   ammFromBondingCurve,
   fundAccountSOL,
@@ -11,14 +11,18 @@ import {
   toEvent,
 } from "./util";
 import {
+  createWrappedNativeAccount,
   getAssociatedTokenAddress,
+  getAssociatedTokenAddressSync,
   getMint,
   getOrCreateAssociatedTokenAccount,
+  NATIVE_MINT,
 } from "@solana/spl-token";
 import { BN } from "bn.js";
 import { assert } from "chai";
-import { Metaplex, token } from "@metaplex-foundation/js";
+import { Metaplex, token, WRAPPED_SOL_MINT } from "@metaplex-foundation/js";
 import { AMM, calculateFee } from "../client";
+import { ammProgramId, createPoolFee, getAmmConfigAddress, getAuthAddress, getOrcleAccountAddress, getPoolAddress, getPoolLpMintAddress, getPoolVaultAddress } from "./raydium";
 
 const GLOBAL_SEED = "global";
 const BONDING_CURVE_SEED = "bonding-curve";
@@ -926,6 +930,77 @@ describe("curve-launchpad", () => {
       }
     }
     assert.equal(errorCode, "InvalidAuthority");
+  });
+
+  it("migrate raydium", async () => {
+    // To migrate, need to withdraw tokens first
+    // For now, tokens are withdrawn to withdrawAuthority
+
+    const creator = withdrawAuthority;
+    const ammConfig = getAmmConfigAddress(0, ammProgramId)[0];
+
+    const wsolMint = NATIVE_MINT;
+    const creatorWsolAccount = getAssociatedTokenAddressSync(wsolMint, creator.publicKey);
+
+    const tokenMint = mint.publicKey;
+    const creatorTokenAccount = getAssociatedTokenAddressSync(tokenMint, creator.publicKey);
+
+    const poolState = getPoolAddress(ammConfig, wsolMint, tokenMint, ammProgramId)[0];
+    const ammAuthority = getAuthAddress(ammProgramId)[0];
+    const token0Vault = getPoolVaultAddress(poolState, wsolMint, ammProgramId)[0];
+    const token1Vault = getPoolVaultAddress(poolState, tokenMint, ammProgramId)[0];
+    const observationState = getOrcleAccountAddress(poolState, ammProgramId)[0];
+    const lpMint = getPoolLpMintAddress(poolState, ammProgramId)[0];
+    const creatorLpToken = getAssociatedTokenAddressSync(lpMint, creator.publicKey);
+
+    const wsolAmount = await connection.getBalance(creator.publicKey);
+    const tokenAmount = (await connection.getTokenAccountBalance(creatorTokenAccount)).value.amount
+
+    let tx = await program.methods
+      .migrate()
+      .accounts({
+        creator: creator.publicKey,
+        ammConfig,
+        authority: ammAuthority,
+        poolState,
+        tokenMint,
+        token0Vault,
+        token1Vault,
+        lpMint,
+        creatorTokenAccount,
+        createPoolFee,
+        creatorLpToken,
+        observationState,
+        cpSwapProgram: ammProgramId,
+      })
+      .signers([creator])
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({
+          units: 1_000_000
+        })
+      ]
+      )
+      .rpc({
+        commitment: 'confirmed',
+        preflightCommitment: 'confirmed',
+        skipPreflight: true
+      });
+
+    // Check source ata balance is empty
+    const tokenAmount0 = await connection.getTokenAccountBalance(creatorWsolAccount);
+    assert.equal(tokenAmount0.value.uiAmount, 0);
+    const tokenAmount1 = await connection.getTokenAccountBalance(creatorTokenAccount);
+    assert.equal(tokenAmount1.value.uiAmount, 0);
+
+    // Check pool vault balance
+    // const vaultBalance0 = await connection.getTokenAccountBalance(token0Vault);
+    // assert.equal(vaultBalance0.value.amount, wsolAmount);
+    const vaultBalance1 = await connection.getTokenAccountBalance(token1Vault);
+    assert.equal(vaultBalance1.value.amount, tokenAmount);
+
+    // Check LP minted
+    const lpBalance = await connection.getTokenAccountBalance(creatorLpToken);
+    assert((lpBalance.value.uiAmount ?? 0) > 0);
   });
 });
 

@@ -2,9 +2,9 @@ use anchor_lang::prelude::*;
 
 use instructions::*;
 
+pub mod amm;
 pub mod instructions;
 pub mod state;
-pub mod amm;
 
 declare_id!("GVapdHoG4xjJZpvGPd8EUBaUJKR5Txpf6VHnVwBVCY69");
 
@@ -31,6 +31,10 @@ pub mod curve_launchpad {
 
     pub fn withdraw(ctx: Context<Withdraw>) -> Result<()> {
         withdraw::withdraw(ctx)
+    }
+
+    pub fn migrate(ctx: Context<Migrate>) -> Result<()> {
+        migrate::process(ctx)
     }
 
     pub fn set_params(

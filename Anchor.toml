@@ -15,7 +15,7 @@ cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.spec.ts"
 
 [test]
 startup_wait = 5000
@@ -26,3 +26,20 @@ shutdown_wait = 2000
 [[test.genesis]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 program = "metaplex_metadata.so"
+
+[[test.genesis]]
+address = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+program = "cp_amm.so"
+
+
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+# url = "https://rpc.asdf1234.win"
+
+# cp-swap create_pool_fee_reveiver in mainnet
+[[test.validator.clone]]
+address = "DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8"
+
+# cp-swap ammConfig in mainnet
+[[test.validator.clone]]
+address = "D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2"
