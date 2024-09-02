@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { CurveLaunchpad } from "../target/types/curve_launchpad";
-import { ComputeBudgetProgram, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { AccountInfo, ComputeBudgetProgram, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   ammFromBondingCurve,
   fundAccountSOL,
@@ -22,7 +22,9 @@ import { BN } from "bn.js";
 import { assert } from "chai";
 import { Metaplex, token, WRAPPED_SOL_MINT } from "@metaplex-foundation/js";
 import { AMM, calculateFee } from "../client";
-import { ammProgramId, createPoolFee, getAmmConfigAddress, getAuthAddress, getOrcleAccountAddress, getPoolAddress, getPoolLpMintAddress, getPoolVaultAddress } from "./raydium";
+import { ammProgramId, createPoolFee, getAmmConfigAddress, getAuthAddress, getOrcleAccountAddress, getPoolAddress, getPoolLpMintAddress, getPoolVaultAddress } from "../client";
+import { IDL } from "./cpmm";
+import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 const GLOBAL_SEED = "global";
 const BONDING_CURVE_SEED = "bonding-curve";
@@ -978,29 +980,41 @@ describe("curve-launchpad", () => {
         ComputeBudgetProgram.setComputeUnitLimit({
           units: 1_000_000
         })
-      ]
-      )
+      ])
       .rpc({
         commitment: 'confirmed',
         preflightCommitment: 'confirmed',
         skipPreflight: true
       });
 
-    // Check source ata balance is empty
+    // Check bonding curve balance is empty
     const tokenAmount0 = await connection.getTokenAccountBalance(creatorWsolAccount);
     assert.equal(tokenAmount0.value.uiAmount, 0);
     const tokenAmount1 = await connection.getTokenAccountBalance(creatorTokenAccount);
     assert.equal(tokenAmount1.value.uiAmount, 0);
 
+    // Check pool owner
+    const poolStateAccount = await connection.getAccountInfo(poolState) as AccountInfo<Buffer>;
+    assert.equal(poolStateAccount.owner.toBase58(), ammProgramId.toBase58());
+
+    // Check pool data
+    // https://github.com/raydium-io/raydium-cp-swap/blob/9a11c1b3d437344478b11635c81e9317cf87b24f/programs/cp-swap/src/states/pool.rs#L26
+    const poolStateData = poolStateAccount.data.slice(8);
+    assert.equal(bs58.encode(poolStateData.slice(0, 32)), ammConfig.toBase58());
+    assert.equal(bs58.encode(poolStateData.slice(32, 64)), creator.publicKey.toBase58());
+    assert.equal(bs58.encode(poolStateData.slice(128, 160)), lpMint.toBase58());
+    assert.equal(bs58.encode(poolStateData.slice(160, 192)), wsolMint.toBase58());
+    assert.equal(bs58.encode(poolStateData.slice(192, 224)), tokenMint.toBase58());
+
     // Check pool vault balance
-    // const vaultBalance0 = await connection.getTokenAccountBalance(token0Vault);
-    // assert.equal(vaultBalance0.value.amount, wsolAmount);
+    const vaultBalance0 = await connection.getTokenAccountBalance(token0Vault);
+    assert.equal((vaultBalance0.value.uiAmount ?? 0) > 0, true);
     const vaultBalance1 = await connection.getTokenAccountBalance(token1Vault);
     assert.equal(vaultBalance1.value.amount, tokenAmount);
 
-    // Check LP minted
+    // Check LP should be 0
     const lpBalance = await connection.getTokenAccountBalance(creatorLpToken);
-    assert((lpBalance.value.uiAmount ?? 0) > 0);
+    assert.equal(lpBalance.value.uiAmount, 0);
   });
 });
 

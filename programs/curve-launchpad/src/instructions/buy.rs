@@ -92,6 +92,7 @@ pub fn buy(ctx: Context<Buy>, token_amount: u64, max_sol_cost: u64) -> Result<()
     let buy_result = amm.apply_buy(targe_token_amount as u128).unwrap();
     let fee = calculate_fee(buy_result.sol_amount, ctx.accounts.global.fee_basis_points);
     let buy_amount_with_fee = buy_result.sol_amount + fee;
+    msg!("buy_amount_with_fee: {}, max_sol_cost: {}", buy_amount_with_fee, max_sol_cost);
 
     //check if the amount of SOL to transfe plus fee is less than the max_sol_cost
     require!(

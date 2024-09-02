@@ -6,7 +6,7 @@ pub mod amm;
 pub mod instructions;
 pub mod state;
 
-declare_id!("GVapdHoG4xjJZpvGPd8EUBaUJKR5Txpf6VHnVwBVCY69");
+declare_id!("Cpm3iVenngWyh3YQUXtjR1PudXBXfJJqLhxMGrDiVSkW");
 
 #[program]
 pub mod curve_launchpad {

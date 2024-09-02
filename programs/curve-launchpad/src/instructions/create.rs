@@ -21,9 +21,9 @@ pub struct Create<'info> {
         payer = creator,
         mint::decimals = DEFAULT_DECIMALS as u8,
         mint::authority = mint_authority,
-        mint::freeze_authority = mint_authority
+        mint::freeze_authority = mint_authority,
     )]
-    mint: Account<'info, Mint>,
+    mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     creator: Signer<'info>,
@@ -33,7 +33,7 @@ pub struct Create<'info> {
         seeds=[b"mint-authority"],
         bump,
     )]
-    mint_authority: AccountInfo<'info>,
+    mint_authority: UncheckedAccount<'info>,
 
     #[account(
         init,
@@ -69,7 +69,7 @@ pub struct Create<'info> {
         seeds::program = token_metadata_program.key(),
         bump,
     )]
-    metadata: AccountInfo<'info>,
+    metadata: UncheckedAccount<'info>,
 
     system_program: Program<'info, System>,
 

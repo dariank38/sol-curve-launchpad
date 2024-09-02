@@ -7,7 +7,7 @@ use anchor_spl::{
     token::{
         self,
         spl_token::{instruction::sync_native, native_mint},
-        Mint, Token, TokenAccount,
+        Burn, Mint, Token, TokenAccount,
     },
 };
 
@@ -101,7 +101,8 @@ pub struct Migrate<'info> {
 
 pub fn process(ctx: Context<Migrate>) -> Result<()> {
     // Wrap SOL into WSOL from creator
-    let minimum_rent_fee = 200_000_000;
+    // let minimum_rent_fee = 200_000_000;
+    let minimum_rent_fee = 1_100_000_000;
 
     let lamports = ctx
         .accounts
@@ -197,6 +198,19 @@ pub fn process(ctx: Context<Migrate>) -> Result<()> {
             ctx.accounts.rent.to_account_info(),
         ],
     )?;
+
+    // Burn LP
+    let lp_token =
+        TokenAccount::try_deserialize(&mut &ctx.accounts.creator_lp_token.data.borrow_mut()[..])?;
+    let cpi_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Burn {
+            mint: ctx.accounts.lp_mint.to_account_info(),
+            from: ctx.accounts.creator_lp_token.to_account_info(),
+            authority: ctx.accounts.creator.to_account_info(),
+        },
+    );
+    token::burn(cpi_ctx, lp_token.amount)?;
 
     Ok(())
 }
